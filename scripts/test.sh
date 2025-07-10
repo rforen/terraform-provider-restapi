@@ -12,7 +12,13 @@ export GOARCH=""
 cd ../restapi
 
 echo "Running tests..."
-if ! go test "$@";then
+# Use -v for verbose output and add stack traces with
+# either GOTRACEBACK=all or GOTRACEBACK=system environment variable
+export GOTRACEBACK=all
+
+# The -v flag enables verbose output
+# You can also add -test.v if you're running specific tests
+if ! go test -v -count=1  "$@";then
   echo "Failed testing. Aborting."
   exit 1
 fi

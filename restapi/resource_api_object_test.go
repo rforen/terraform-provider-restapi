@@ -133,6 +133,32 @@ resource "restapi_object" "%s" {
 `, name, strConfig)
 }
 
+func generateTestResourceWithArray(name string, data string, params map[string]interface{}) string {
+	if !json.Valid([]byte(data)) {
+		return "invalid JSON response"
+	}
+
+	strData2, _ := json.Marshal(data)
+	config := []string{
+		`path = "/api/objects"`,
+		fmt.Sprintf("data = %s", strData2),
+	}
+	for k, v := range params {
+		entry := fmt.Sprintf(`%s = "%v"`, k, v)
+		config = append(config, entry)
+	}
+	strConfig := ""
+	for _, v := range config {
+		strConfig = strConfig + v + "\n"
+	}
+
+	return fmt.Sprintf(`
+resource "restapi_object" "%s" {
+%s
+}
+`, name, strConfig)
+}
+
 func mockServer(host string, returnCodes map[string]int, responses map[string]string) *http.Server {
 	serverMux := http.NewServeMux()
 	serverMux.HandleFunc("/api/", func(w http.ResponseWriter, req *http.Request) {
@@ -202,4 +228,69 @@ func TestAccRestApiObject_FailedUpdate(t *testing.T) {
 			},
 		},
 	})
+}
+func TestAccRestApiObject_ReadResponseIsArray(t *testing.T) {
+	debug := false
+	apiServerObjects := make(map[string]map[string]interface{})
+
+	// Fake server returns an array for GET /api/objects/list/5678
+	svr := fakeserver.NewFakeServerWithArrayResponse(8083, apiServerObjects, true, debug, "", true)
+	os.Setenv("REST_API_URI", "http://127.0.0.1:8083")
+
+	// // Patch fakeserver to return an array for GET /api/objects/5678
+	// svr.SetCustomHandler("/api/objects/5678", func(w http.ResponseWriter, req *http.Request) {
+	// 	if req.Method == "GET" {
+	// 		w.Header().Set("Content-Type", "application/json")
+	// 		w.WriteHeader(http.StatusOK)
+	// 		w.Write([]byte(`[{"id":"5678","first":"Array","last":"Response"},{"id":"9999","first":"Other","last":"Obj"}]`))
+	// 		return
+	// 	}
+	// 	// Default handler for other methods
+	// 	svr.DefaultHandler(w, req)
+	// })
+
+	opt := &apiClientOpt{
+		uri:                 "http://127.0.0.1:8083/",
+		insecure:            false,
+		username:            "",
+		password:            "",
+		headers:             make(map[string]string),
+		timeout:             2,
+		idAttribute:         "id",
+		copyKeys:            make([]string, 0),
+		writeReturnsObject:  false,
+		createReturnsObject: false,
+		debug:               debug,
+		readResponseIsArray: true,
+	}
+	client, err := NewAPIClient(opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resource.UnitTest(t, resource.TestCase{
+		Providers: testAccProviders,
+		PreCheck:  func() { svr.StartInBackground() },
+		Steps: []resource.TestStep{
+			{
+				Config: generateTestResourceWithArray(
+					"ArrayObj",
+					`[{ "id": "5678", "first": "Array", "last": "Response" }]`,
+					map[string]interface{}{
+						"read_response_is_array": true,
+						"object_id":              "5678",
+					},
+				),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckRestapiObjectExists("restapi_object.ArrayObj", "5678", client),
+					resource.TestCheckResourceAttr("restapi_object.ArrayObj", "id", "5678"),
+					resource.TestCheckResourceAttr("restapi_object.ArrayObj", "api_data.first", "Array"),
+					resource.TestCheckResourceAttr("restapi_object.ArrayObj", "api_data.last", "Response"),
+					resource.TestCheckResourceAttr("restapi_object.ArrayObj", "api_response", `[{"first":"Array","id":"5678","last":"Response"},{"first":"Other","id":"9999","last":"Obj"}]`),
+				),
+			},
+		},
+	})
+
+	svr.Shutdown()
 }

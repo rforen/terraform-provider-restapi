@@ -27,6 +27,7 @@ func TestAccRestApiObject_importBasic(t *testing.T) {
 		writeReturnsObject:  false,
 		createReturnsObject: false,
 		debug:               debug,
+		readResponseIsArray: false,
 	}
 	client, err := NewAPIClient(opt)
 	if err != nil {
@@ -52,7 +53,7 @@ func TestAccRestApiObject_importBasic(t *testing.T) {
 				ImportStateIdPrefix: "/api/objects/",
 				ImportStateVerify:   true,
 				/* create_response isn't populated during import (we don't know the API response from creation) */
-				ImportStateVerifyIgnore: []string{"debug", "data", "create_response", "ignore_all_server_changes"},
+				ImportStateVerifyIgnore: []string{"debug", "data", "create_response", "ignore_all_server_changes", "read_response_is_array"},
 			},
 		},
 	})

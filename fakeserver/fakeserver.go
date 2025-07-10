@@ -13,23 +13,33 @@ import (
 
 /*Fakeserver represents a HTTP server with objects to hold and return*/
 type Fakeserver struct {
-	server  *http.Server
-	objects map[string]map[string]interface{}
-	debug   bool
-	running bool
+	server              *http.Server
+	objects             map[string]map[string]interface{}
+	debug               bool
+	running             bool
+	readResponseIsArray bool
 }
 
 /*NewFakeServer creates a HTTP server used for tests and debugging*/
+// Go does not support default parameters directly.
+// Instead, you can provide multiple constructors or use functional options.
+// Here is a version with a simplified constructor and a separate function for the optional parameter.
+
 func NewFakeServer(iPort int, iObjects map[string]map[string]interface{}, iStart bool, iDebug bool, dir string) *Fakeserver {
+	return NewFakeServerWithArrayResponse(iPort, iObjects, iStart, iDebug, dir, false)
+}
+
+func NewFakeServerWithArrayResponse(iPort int, iObjects map[string]map[string]interface{}, iStart bool, iDebug bool, dir string, readResponseIsArray bool) *Fakeserver {
 	serverMux := http.NewServeMux()
 
 	svr := &Fakeserver{
-		debug:   iDebug,
-		objects: iObjects,
-		running: false,
+		debug:               iDebug,
+		objects:             iObjects,
+		running:             false,
+		readResponseIsArray: readResponseIsArray,
 	}
 
-	//If we were passed an argument for where to serve /static from...
+	// If we were passed an argument for where to serve /static from...
 	if dir != "" {
 		_, err := os.Stat(dir)
 		if err == nil {
@@ -161,8 +171,15 @@ func (svr *Fakeserver) handleAPIObject(w http.ResponseWriter, r *http.Request) {
 		for _, hash := range svr.objects {
 			result = append(result, hash)
 		}
+		// if svr.readResponseIsArray {
+		// 	var arr []byte[]
+		// 	arr[0] = b
+		// 	result := json.Unmarshal(arr)
+		// 	w.Write(result)
+		// } else {
 		b, _ := json.Marshal(result)
 		w.Write(b)
+		// }
 		return
 	}
 
